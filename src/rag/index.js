@@ -76,12 +76,15 @@ async function run() {
     let toolReq;
     if (!warmUp && useTools){
         Job.log("Send tool request...");
+        const toolsInputs = [];
+        for(const query of queries){
+            toolsInputs.push(await Job.newInputData(query, "text", "query"));
+        }
+
         toolReq = Job.subrequest({
-            runOn: "openagents/tools",
+            runOn: "openagents/tool-selector",
             outputFormat: "application/json",
-            inputs: [
-                await Job.newInputData(queries, "text", "queries")
-            ],
+            inputs: toolsInputs,
             params: [
                 ...cacheParams
             ]

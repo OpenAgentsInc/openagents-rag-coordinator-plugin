@@ -163,6 +163,7 @@ async function run() {
             newContext += toolResult + "\n";
         }
        
+        Job.log("Output ready. Returning...");
         Host.outputString(newContext);
     }catch(e){
         await Job.log("Error! "+e.message);

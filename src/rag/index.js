@@ -76,75 +76,76 @@ async function run() {
             cacheParams.push(await Job.newParam("no-cache", noCache));
         }
 
+        let newContext = "";
 
+        if (documents.length>0){
+            Job.log("Starting rag pipeline with k="+topK+", max-tokens="+maxTokens+", quantize="+quantize+", overlap="+overlap+", cache-duration-hint="+cacheDurationHint+", no-cache="+noCache);
+            Job.log("Fetching documents...");
+            const downloadDocumentsReq =  Job.subrequest({
+                runOn: "openagents/document-retrieval",
+                outputFormat: "application/hyperdrive+bundle",
+                inputs: await Promise.all(documentsUrls.map((query) => Job.newInputData(query, "url"))),
+                params: cacheParams
+            });
 
-        Job.log("Starting rag pipeline with k="+topK+", max-tokens="+maxTokens+", quantize="+quantize+", overlap="+overlap+", cache-duration-hint="+cacheDurationHint+", no-cache="+noCache);
-        Job.log("Fetching documents...");
-        const downloadDocumentsReq =  Job.subrequest({
-            runOn: "openagents/document-retrieval",
-            outputFormat: "application/hyperdrive+bundle",
-            inputs: await Promise.all(documentsUrls.map((query) => Job.newInputData(query, "url"))),
-            params: cacheParams
-        });
+            Job.log("Creating embeddings for  queries...");
+            const embedQueriesReq = Job.subrequest({
+                runOn: "openagents/embeddings",
+                outputFormat: quantize?"application/json":"application/hyperdrive+bundle",
+                inputs: [
+                    ...await Promise.all(queries.map((query) => Job.newInputData(query, "text", "query"))),
+                ],
+                params: [
+                    await Job.newParam("max-tokens", maxTokens),
+                    await Job.newParam("overlap", overlap),
+                    await Job.newParam("quantize", quantize),
+                    ...cacheParams
+                ]
+            });
 
-        Job.log("Creating embeddings for  queries...");
-        const embedQueriesReq = Job.subrequest({
-            runOn: "openagents/embeddings",
-            outputFormat: quantize?"application/json":"application/hyperdrive+bundle",
-            inputs: [
-                ...await Promise.all(queries.map((query) => Job.newInputData(query, "text", "query"))),
-            ],
-            params: [
-                await Job.newParam("max-tokens", maxTokens),
-                await Job.newParam("overlap", overlap),
-                await Job.newParam("quantize", quantize),
-                ...cacheParams
-            ]
-        });
+            const documentsBundle = await Job.waitForContent(downloadDocumentsReq, expectedResults, maxWaitTime);
+        
+            Job.log("Creating embeddings for documents...");
+            const documentsEmbeddingReq = Job.subrequest({
+                runOn: "openagents/embeddings",
+                outputFormat: "application/hyperdrive+bundle",
+                inputs: [
+                    await Job.newInputData(documentsBundle, "application/hyperdrive+bundle", "passage"),
+                    ...await Promise.all(documents.map((doc) => Job.newInputData(doc, "text", "passage")))
+                ],
+                params: [
+                    await Job.newParam("max-tokens", maxTokens),
+                    await Job.newParam("overlap", overlap),
+                    await Job.newParam("quantize", quantize),
+                    ...cacheParams
+                ]
+            });
 
-        const documentsBundle = await Job.waitForContent(downloadDocumentsReq, expectedResults, maxWaitTime);
-    
-        Job.log("Creating embeddings for documents...");
-        const documentsEmbeddingReq = Job.subrequest({
-            runOn: "openagents/embeddings",
-            outputFormat: "application/hyperdrive+bundle",
-            inputs: [
-                await Job.newInputData(documentsBundle, "application/hyperdrive+bundle", "passage"),
-                ...await Promise.all(documents.map((doc) => Job.newInputData(doc, "text", "passage")))
-            ],
-            params: [
-                await Job.newParam("max-tokens", maxTokens),
-                await Job.newParam("overlap", overlap),
-                await Job.newParam("quantize", quantize),
-                ...cacheParams
-            ]
-        });
+            const [queriesEmbeddingBundle, documentsEmbeddingBundle] = await Promise.all([
+                Job.waitForContent(embedQueriesReq, expectedResults, maxWaitTime), 
+                Job.waitForContent(documentsEmbeddingReq, expectedResults, maxWaitTime)
+            ]);
 
-        const [queriesEmbeddingBundle, documentsEmbeddingBundle] = await Promise.all([
-            Job.waitForContent(embedQueriesReq, expectedResults, maxWaitTime), 
-            Job.waitForContent(documentsEmbeddingReq, expectedResults, maxWaitTime)
-        ]);
+            Job.log("Searching...");
+            const searchReq = Job.subrequest({
+                runOn: "openagents/search",
+                outputFormat: "application/json",
+                inputs: [
+                    await Job.newInputData(documentsEmbeddingBundle, "application/hyperdrive+bundle", "index"),
+                    await Job.newInputData(queriesEmbeddingBundle, quantize?"application/json":"application/hyperdrive+bundle", "query")
+                ],
+                params: [
+                    await Job.newParam("k", topK),
+                    await Job.newParam("normalize", "true"),
+                    ...cacheParams
+                ]
+            });
 
-        Job.log("Searching...");
-        const searchReq = Job.subrequest({
-            runOn: "openagents/search",
-            outputFormat: "application/json",
-            inputs: [
-                await Job.newInputData(documentsEmbeddingBundle, "application/hyperdrive+bundle", "index"),
-                await Job.newInputData(queriesEmbeddingBundle, quantize?"application/json":"application/hyperdrive+bundle", "query")
-            ],
-            params: [
-                await Job.newParam("k", topK),
-                await Job.newParam("normalize", "true"),
-                ...cacheParams
-            ]
-        });
-
-        const searchResult = JSON.parse(await Job.waitForContent(searchReq, expectedResults, maxWaitTime));       
-        Job.log("Merging context... "+searchResult.length+" results found");
-        let newContext ="";
-        for(const result of searchResult){
-            newContext+=result.value+"\n";
+            const searchResult = JSON.parse(await Job.waitForContent(searchReq, expectedResults, maxWaitTime));       
+            Job.log("Merging context... "+searchResult.length+" results found");
+            for(const result of searchResult){
+                newContext+=result.value+"\n";
+            }
         }
 
         // Send tool req
@@ -154,7 +155,7 @@ async function run() {
             for (const query of queries) {
                 toolsInputs.push(await Job.newInputData(query, "text", "query"));
             }
-            toolsInputs.push(await Job.newInputData(newContext, "text", "context"));
+            if(newContext) toolsInputs.push(await Job.newInputData(newContext, "text", "context"));
             const toolReq = Job.subrequest({
                 runOn: "openagents/tool-selector",
                 outputFormat: "application/json",

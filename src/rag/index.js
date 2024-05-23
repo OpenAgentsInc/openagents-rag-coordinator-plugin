@@ -78,13 +78,13 @@ async function run() {
 
         let newContext = "";
 
-        if (documents.length>0){
+        if (documentsUrls.length>0){
             Job.log("Starting rag pipeline with k="+topK+", max-tokens="+maxTokens+", quantize="+quantize+", overlap="+overlap+", cache-duration-hint="+cacheDurationHint+", no-cache="+noCache);
             Job.log("Fetching documents...");
             const downloadDocumentsReq =  Job.subrequest({
                 runOn: "openagents/document-retrieval",
                 outputFormat: "application/hyperdrive+bundle",
-                inputs: await Promise.all(documentsUrls.map((query) => Job.newInputData(query, "url"))),
+                inputs: await Promise.all(documentsUrls.map((d) => Job.newInputData(d, "url"))),
                 params: cacheParams
             });
 

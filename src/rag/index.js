@@ -33,14 +33,7 @@ async function run() {
                     documents.push(input.data);
                 }
             }
-        }
-
-        // Early return if no documents 
-        if (documents.length === 0 && documentsUrls.length === 0) {
-            Host.outputString("");
-            return;
-        }
-    
+        }  
 
         for(const param of job.param){
             if(param.key=="k"){
@@ -78,7 +71,7 @@ async function run() {
 
         let newContext = "";
 
-        if (documentsUrls.length>0){
+        if (documentsUrls.length>0||documents.length>0){
             Job.log("Starting rag pipeline with k="+topK+", max-tokens="+maxTokens+", quantize="+quantize+", overlap="+overlap+", cache-duration-hint="+cacheDurationHint+", no-cache="+noCache);
             Job.log("Fetching documents...");
             const downloadDocumentsReq =  Job.subrequest({
@@ -150,27 +143,30 @@ async function run() {
 
         // Send tool req
         if (!warmUp && useTools) {
-            Job.log("Sending tool request...");
-            const toolsInputs = [];
-            for (const query of queries) {
-                toolsInputs.push(await Job.newInputData(query, "text", "query"));
-            }
-            if(newContext) toolsInputs.push(await Job.newInputData(newContext, "text", "context"));
-            const toolReq = Job.subrequest({
-                runOn: "openagents/tool-selector",
-                outputFormat: "application/json",
-                inputs: toolsInputs,
-                params: [
-                    ...cacheParams
-                ]
-            });
+            try{
+                Job.log("Sending tool request...");
+                const toolsInputs = [];
+                for (const query of queries) {
+                    toolsInputs.push(await Job.newInputData(query, "text", "query"));
+                }
+                if(newContext) toolsInputs.push(await Job.newInputData(newContext, "text", "context"));
+                const toolReq = Job.subrequest({
+                    runOn: "openagents/tool-selector",
+                    outputFormat: "application/json",
+                    inputs: toolsInputs,
+                    params: [
+                        ...cacheParams
+                    ]
+                });
 
-            Job.log("Merging tools result...");
-            let toolResult = await Job.waitForContent(toolReq, expectedResults, maxWaitTime);
-            toolResult = toolsResultTemplate.replace("{{TOOL_RESULT}}", toolResult);
-            newContext += toolResult + "\n";
-        }
-       
+                Job.log("Merging tools result...");
+                let toolResult = await Job.waitForContent(toolReq, expectedResults, maxWaitTime);
+                toolResult = toolsResultTemplate.replace("{{TOOL_RESULT}}", toolResult);
+                newContext += toolResult + "\n";
+            }catch(e){
+                Job.log("Error when using tools "+e.message);
+            }
+        }       
         Job.log("Output ready. Returning...");
         Host.outputString(newContext);
     }catch(e){

@@ -16,6 +16,7 @@ async function run() {
         let toolsResultTemplate ="{{TOOL_RESULT}}";
         let expectedResults = 1;
         let maxWaitTime = 1000 * 60 * 2;
+        let toolWaitTime = 1000 * 10;
 
 
         const documents = []; // plain text documents
@@ -160,7 +161,7 @@ async function run() {
                 });
 
                 Job.log("Merging tools result...");
-                let toolResult = await Job.waitForContent(toolReq, expectedResults, maxWaitTime);
+                let toolResult = await Job.waitForContent(toolReq, expectedResults, toolWaitTime);
                 toolResult = toolsResultTemplate.replace("{{TOOL_RESULT}}", toolResult);
                 newContext += toolResult + "\n";
             }catch(e){

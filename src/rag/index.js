@@ -14,6 +14,9 @@ async function run() {
         let warmUp = false;
         let useTools=false;
         let toolsResultTemplate ="{{TOOL_RESULT}}";
+        let expectedResults = 1;
+        let maxWaitTime = 1000 * 60 * 2;
+
 
         const documents = []; // plain text documents
         const documentsUrls = []; // urls to documents
@@ -57,6 +60,7 @@ async function run() {
                 noCache = param.value=="true";
             }else if(param.key=="warm-up"){
                 warmUp = param.value == "true";
+                maxWaitTime = 1000*60*60;
             }else if(param.key=="use-tools"){
                 useTools=param.value=="true";
             }else if(param.key=="tools-result-template"){
@@ -98,7 +102,7 @@ async function run() {
             ]
         });
 
-        const documentsBundle = await Job.waitForContent(downloadDocumentsReq);
+        const documentsBundle = await Job.waitForContent(downloadDocumentsReq, expectedResults, maxWaitTime);
     
         Job.log("Creating embeddings for documents...");
         const documentsEmbeddingReq = Job.subrequest({
@@ -116,7 +120,10 @@ async function run() {
             ]
         });
 
-        const [queriesEmbeddingBundle, documentsEmbeddingBundle] = await Promise.all([Job.waitForContent(embedQueriesReq), Job.waitForContent(documentsEmbeddingReq)]);
+        const [queriesEmbeddingBundle, documentsEmbeddingBundle] = await Promise.all([
+            Job.waitForContent(embedQueriesReq, expectedResults, maxWaitTime), 
+            Job.waitForContent(documentsEmbeddingReq, expectedResults, maxWaitTime)
+        ]);
 
         Job.log("Searching...");
         const searchReq = Job.subrequest({
@@ -133,7 +140,7 @@ async function run() {
             ]
         });
 
-        const searchResult = JSON.parse(await Job.waitForContent(searchReq));        
+        const searchResult = JSON.parse(await Job.waitForContent(searchReq, expectedResults, maxWaitTime));       
         Job.log("Merging context... "+searchResult.length+" results found");
         let newContext ="";
         for(const result of searchResult){
@@ -158,7 +165,7 @@ async function run() {
             });
 
             Job.log("Merging tools result...");
-            let toolResult = await Job.waitForContent(toolReq);
+            let toolResult = await Job.waitForContent(toolReq, expectedResults, maxWaitTime);
             toolResult = toolsResultTemplate.replace("{{TOOL_RESULT}}", toolResult);
             newContext += toolResult + "\n";
         }

@@ -7,7 +7,7 @@ declare module "extism:host" {
         Job_log(ptr: I64): void;
         Job_get(ptr: I64): I64;
         Job_isDone(ptr: I64): I64;
-        Job_waitFor(ptr: I64): I64;
+        Job_waitFor(ptr: I64, nExpectedResults: I64, maxWaitTime: I64): I64;
         Job_newInputEventRef(eventIdPtr: I64, markerPtr: I64, sourceRelayPtr: I64): I64;
         Job_newInputJobRef(jobIdPtr: I64, markerPtr: I64, sourceRelayPtr: I64): I64;
         Job_newInputData(dataPtr: I64, typePtr: I64, markerPtr: I64, sourcePtr: I64): I64;

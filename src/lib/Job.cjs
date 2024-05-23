@@ -147,16 +147,41 @@ class Job {
     }
 
 
-    static async waitForContent(jobId) {
-        const job = await Job.waitFor(jobId);
-        const content = job.result.content;
-        return content;
+    static async waitForContents(jobId, nExpectedResults = 1, maxWaitTime = 1000 * 60 * 2) {
+        const job = await Job.waitFor(jobId, nExpectedResults, maxWaitTime);
+        const choices = [];
+        if (job) {
+            for (const state of job.results) {
+                if (state.status == 3) {
+                    choices.push(state);
+                }
+            }
+        }
+        // deduplicate ?
+        return choices;
     }
 
-    static async waitFor(jobId) {
+    static async waitForContent(jobId, nExpectedResults = 1, maxWaitTime = 1000 * 60 * 2) {
+        const job = await Job.waitFor(jobId, nExpectedResults, maxWaitTime);
+        if (job) {
+            for (const state of job.results) {
+                if (state.status == 3) {
+                    return state.result.content;
+                }
+            }
+        }
+        throw new Error("No content found");
+    }
+
+    static async waitFor(jobId, nExpectedResults = 1, maxWaitTime = 1000 * 60 * 2) {
         jobId = await jobId;
-        const mem = Memory.fromString(jobId);
-        await Job_waitFor(mem.offset);
+        const jobIdOff = Memory.fromString(jobId);
+        const nExpectedResultsB = BigInt(nExpectedResults);
+        const maxWaitTimeB = BigInt(maxWaitTime);
+        const res = await Job_waitFor(jobIdOff.offset, nExpectedResultsB, maxWaitTimeB);
+        if (res == 0) {
+            throw new Error("Job " + jobId + " failed");
+        }
         return Job.get(jobId);
     }
 

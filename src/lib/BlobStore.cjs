@@ -9,19 +9,18 @@ const {
 
 
 class BlobStore {
-    constructor(id){
+    constructor(id) {
         this.idMem = Memory.fromString(id);
     }
 
-    static async create(name, encryptionKey="", includeEncryptionKeyInOutput=false) {
+    static async create(name, encryptionKey = "", includeEncryptionKeyInOutput = false) {
         const nameMem = Memory.fromString(name);
         const encryptionKeyMem = Memory.fromString(encryptionKey);
-        const includeEncryptionKeyInOutput = BigInt(includeEncryptionKeyInOutput?1:0);
-        const urlOff = await BlobStore_create(nameMem.offset, encryptionKeyMem.offset, includeEncryptionKeyInOutput)
+        const urlOff = await BlobStore_create(nameMem.offset, encryptionKeyMem.offset, includeEncryptionKeyInOutput ? 1 : 0)
         return new BlobStore(Memory.find(urlOff).readString());
     }
 
-    static async open(url, encryptionKey="") {
+    static async open(url, encryptionKey = "") {
         const urlMem = Memory.fromString(url);
         const encryptionKeyMem = Memory.fromString(encryptionKey);
         const idOff = await BlobStore_open(urlMem.offset, encryptionKeyMem.offset);
@@ -40,10 +39,10 @@ class BlobStore {
 
     async read(path) {
         const pathMem = Memory.fromString(path);
-        const dataOff = await BlobStore_read(this.idMem.offset,pathMem.offset);
+        const dataOff = await BlobStore_read(this.idMem.offset, pathMem.offset);
         return Memory.find(dataOff).readBuffer();
     }
-    
+
     async del(path) {
         const pathMem = Memory.fromString(path);
         await BlobStore_del(this.idMem.offset, pathMem.offset);

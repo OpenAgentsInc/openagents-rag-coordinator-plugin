@@ -17,6 +17,7 @@ async function run() {
         let expectedResults = 1;
         let maxWaitTime = 1000 * 60 * 2;
         let toolWaitTime = 1000 * 10;
+        let toolWhitelist = [];
 
 
         const documents = []; // plain text documents
@@ -38,27 +39,29 @@ async function run() {
 
         for(const param of job.param){
             if(param.key=="k"){
-                const value=Number(param.value);
+                const value=Number(param.value[0]);
                 topK=value;
             }else if(param.key=="max-tokens"){
-                const value=Number(param.value);
+                const value = Number(param.value[0]);
                 maxTokens=value;
             }else if(param.key=="quantize"){
-                quantize=param.value=="true";
+                quantize = param.value[0] =="true";
             }else if(param.key=="overlap"){
-                const value=Number(param.value);
+                const value = Number(param.value[0]);
                 overlap=value;
             }else if(param.key=="cache-duration-hint"){
-                cacheDurationHint=param.value;
+                cacheDurationHint = param.value[0];
             }else if(param.key=="no-cache"){
-                noCache = param.value=="true";
+                noCache = param.value[0] =="true";
             }else if(param.key=="warm-up"){
-                warmUp = param.value == "true";
+                warmUp = param.value[0] == "true";
                 maxWaitTime = 1000*60*60;
             }else if(param.key=="use-tools"){
-                useTools=param.value=="true";
+                useTools = param.value[0] =="true";
             }else if(param.key=="tools-result-template"){
-                toolsResultTemplate=param.value;
+                toolsResultTemplate = param.value[0];
+            }else if(param.key=="tools-whitelist"){
+                toolWhitelist.push(...param.value);
             }
         }
 
@@ -151,12 +154,19 @@ async function run() {
                     toolsInputs.push(await Job.newInputData(query, "text", "query"));
                 }
                 if(newContext) toolsInputs.push(await Job.newInputData(newContext, "text", "context"));
+
+                const toolsParams = [];
+                if (toolWhitelist.length > 0) {
+                    toolsParams.push(await Job.newParam("tools-whitelist", toolWhitelist));
+                }
+                
                 const toolReq = Job.subrequest({
                     runOn: "openagents/tool-selector",
                     outputFormat: "application/json",
                     inputs: toolsInputs,
                     params: [
-                        ...cacheParams
+                        ...cacheParams,
+                        ...toolsParams
                     ]
                 });
 

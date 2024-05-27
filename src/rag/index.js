@@ -18,6 +18,7 @@ async function run() {
         let maxWaitTime = 1000 * 60 * 2;
         let toolWaitTime = 1000 * 10;
         let toolWhitelist = [];
+        let trackToolUsage = true;
 
 
         const documents = []; // plain text documents
@@ -62,6 +63,8 @@ async function run() {
                 toolsResultTemplate = param.value[0];
             }else if(param.key=="tools-whitelist"){
                 toolWhitelist.push(...param.value);
+            }else if(param.key=="track-tool-usage"){
+                trackToolUsage = param.value[0] =="true";
             }
         }
 
@@ -74,6 +77,7 @@ async function run() {
         }
 
         let newContext = "";
+        let meta={};
 
         if (documentsUrls.length>0||documents.length>0){
             Job.log("Starting rag pipeline with k="+topK+", max-tokens="+maxTokens+", quantize="+quantize+", overlap="+overlap+", cache-duration-hint="+cacheDurationHint+", no-cache="+noCache);
@@ -159,6 +163,8 @@ async function run() {
                 if (toolWhitelist.length > 0) {
                     toolsParams.push(await Job.newParam("tools-whitelist", toolWhitelist));
                 }
+
+                toolsParams.push(await Job.newParam("track-tool-usage", trackToolUsage));
                 
                 const toolReq = Job.subrequest({
                     runOn: "openagents/tool-selector",
@@ -172,6 +178,20 @@ async function run() {
 
                 Job.log("Merging tools result...");
                 let toolResult = await Job.waitForContent(toolReq, expectedResults, toolWaitTime);
+                try{
+                    const toolData = JSON.parse(toolResult);
+                    for(const msg of toolData){
+                        if(typeof msg == "object" && msg.sources){
+                            for(const source of msg.sources){
+                                // newContext += "Source: "+source.name+"\n";
+                                meta.usedTools = meta.usedTools || [];
+                                meta.usedTools.push(source.id);                                                         
+                            }
+                        }
+                    }
+                }catch(e){
+                    Job.log("Error when using tools "+e.message);
+                }
                 toolResult = toolsResultTemplate.replace("{{TOOL_RESULT}}", toolResult);
                 newContext += toolResult + "\n";
             }catch(e){
@@ -179,7 +199,7 @@ async function run() {
             }
         }       
         Job.log("Output ready. Returning...");
-        Host.outputString(newContext);
+        Host.outputString(JSON.stringify({content: newContext, meta: meta}));
     }catch(e){
         await Job.log("Error! "+e.message);
         Host.outputString("");

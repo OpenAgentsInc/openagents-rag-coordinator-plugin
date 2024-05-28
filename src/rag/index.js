@@ -77,7 +77,9 @@ async function run() {
         }
 
         let newContext = "";
-        let meta={};
+        let meta={
+            usedTools: []
+        };
 
         if (documentsUrls.length>0||documents.length>0){
             Job.log("Starting rag pipeline with k="+topK+", max-tokens="+maxTokens+", quantize="+quantize+", overlap="+overlap+", cache-duration-hint="+cacheDurationHint+", no-cache="+noCache);
@@ -184,7 +186,6 @@ async function run() {
                         if(typeof msg == "object" && msg.sources){
                             for(const source of msg.sources){
                                 // newContext += "Source: "+source.name+"\n";
-                                meta.usedTools = meta.usedTools || [];
                                 meta.usedTools.push(source.id);                                                         
                             }
                         }

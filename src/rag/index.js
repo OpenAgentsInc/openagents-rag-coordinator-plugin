@@ -19,6 +19,7 @@ async function run() {
         let toolWaitTime = 1000 * 10;
         let toolWhitelist = [];
         let trackToolUsage = true;
+        let maxToolCalls = 3; 
 
 
         const documents = []; // plain text documents
@@ -65,6 +66,8 @@ async function run() {
                 toolWhitelist.push(...param.value);
             }else if(param.key=="track-tool-usage"){
                 trackToolUsage = param.value[0] =="true";
+            }else if(param.key=="max-tool-calls"){
+                maxToolCalls = Number(param.value[0]);
             }
         }
 
@@ -165,7 +168,8 @@ async function run() {
                 if (toolWhitelist.length > 0) {
                     toolsParams.push(await Job.newParam("tools-whitelist", toolWhitelist));
                 }
-
+                
+                toolsParams.push(await Job.newParam("max-tool-calls", maxToolCalls));
                 toolsParams.push(await Job.newParam("track-tool-usage", trackToolUsage));
                 
                 const toolReq = Job.subrequest({
